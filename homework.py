@@ -20,7 +20,6 @@ RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
-
 HOMEWORK_VERDICTS = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
@@ -56,26 +55,28 @@ def get_api_answer(timestamp):
         api_answer = requests.get(
             ENDPOINT, headers=HEADERS, params={"from_date": timestamp}
         )
-    except Exception:
-        raise ApiResponseException
+    except Exception as error:
+        raise Exception(f'Эндпоинт не доступен {api_answer}: {error}')
     if api_answer.status_code != requests.codes.ok:
-        raise ApiResponseException
+        logging.error(f'Ошибка {api_answer.status_code}')
+        raise ApiResponseException(
+            f'Ошибка при запросе к API {api_answer.status_code}')
     try:
         return api_answer.json()
-    except Exception:
-        raise ApiResponseException("Не удалось получить данные")
+    except ValueError:
+        raise ValueError("Не удалось получить данные")
 
 
 def check_response(response):
     """Проверка ответа API."""
-    if not isinstance(response, dict):
-        raise TypeError("Ответ не словарь")
+    if not isinstance(response, dict) or response is None:
+        raise TypeError('Ответ  не словарь dict')
     logger.info("Получаем homeworks")
     homeworks = response.get("homeworks")
     if 'homeworks' not in response or 'current_date' not in response:
-        raise KeyError("Пустой ответ от API")
+        raise KeyError('Пустой ответ "response" от API')
     if not isinstance(homeworks, list):
-        raise TypeError("Homeworks не является списком")
+        raise TypeError("Переменная 'homeworks' не является списком")
     return homeworks
 
 
@@ -85,7 +86,7 @@ def parse_status(homework):
     homework_status = homework.get("status", None)
     verdict = HOMEWORK_VERDICTS.get(homework_status)
     if homework_name is None or homework_status not in HOMEWORK_VERDICTS:
-        raise HomeworkError
+        raise HomeworkError(f'Незвестны статус:{homework_status}')
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
@@ -96,23 +97,27 @@ def main():
             'Проверьте количество переменных окружения'
         )
         sys.exit('Отсутствует обязательная переменная окружения')
+    status = ''
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
+    timestamp = int(time.time())
     while True:
         try:
             logger.debug("Пуск бота")
-            timestamp = int(time.time())
             response = get_api_answer(timestamp)
             homeworks = check_response(response)
             if homeworks:
                 homework_status = parse_status(homeworks[0])
+            else:
+                homework_status = 'Новых задач нет '
+            if homework_status != status:
                 send_message(bot, homework_status)
-                if homework_status is None:
-                    logger.debug("New статус не обнаружен")
+            logger.debug("New статус не обнаружен")
             timestamp = response.get('current_date', timestamp)
             logger.debug("Сон")
-        except Exception as error:
+        except TelegramError as error:
             message = f"Ошибка в программы: {error}"
             logger.error(message, exc_info=True)
+            send_message(bot, message)
         finally:
             time.sleep(RETRY_PERIOD)
 

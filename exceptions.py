@@ -1,14 +1,19 @@
 class ApiResponseException(Exception):
     """Ошибка при запросе к API."""
 
-    def __str__(self):
-        """Ошибка в запросе к API."""
-        return "Ошибка при запросе к API."
+
+pass
 
 
 class HomeworkError(Exception):
     """Неправильно заполненный словарь homework."""
 
-    def __str__(self):
-        """Ошибка в заполнении словаря."""
-        return "Неправильно заполненный словарь homework."
+
+pass
+
+
+class TelegramError(Exception):
+    """Ошибки Telegram."""
+
+
+pass

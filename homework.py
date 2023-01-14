@@ -55,28 +55,30 @@ def get_api_answer(timestamp):
         api_answer = requests.get(
             ENDPOINT, headers=HEADERS, params={"from_date": timestamp}
         )
-    except Exception as error:
-        raise Exception(f'Эндпоинт не доступен {api_answer}: {error}')
+    except requests.RequestException:
+        raise ApiResponseException('Эндпоинт не доступен')
     if api_answer.status_code != requests.codes.ok:
-        logging.error(f'Ошибка {api_answer.status_code}')
         raise ApiResponseException(
-            f'Ошибка при запросе к API {api_answer.status_code}')
-    try:
-        return api_answer.json()
-    except ValueError:
-        raise ValueError("Не удалось получить данные")
+            'Ошибка при запросе к API.',
+            api_answer.status_code,
+            api_answer.headers,
+            api_answer.url
+        )
+    return api_answer.json()
 
 
 def check_response(response):
     """Проверка ответа API."""
-    if not isinstance(response, dict) or response is None:
-        raise TypeError('Ответ  не словарь dict')
+    if not isinstance(response, dict):
+        raise TypeError(f'Ответ  не словарь dict,'
+                        f'Тип  ответа {type(response)}')
     logger.info("Получаем homeworks")
     homeworks = response.get("homeworks")
     if 'homeworks' not in response or 'current_date' not in response:
-        raise KeyError('Пустой ответ "response" от API')
+        raise KeyError(response)
     if not isinstance(homeworks, list):
-        raise TypeError("Переменная 'homeworks' не является списком")
+        raise TypeError(f'Переменная  не является списком'
+                        f'ТИп значения ключа {type(homeworks)}')
     return homeworks
 
 
@@ -114,7 +116,7 @@ def main():
             logger.debug("New статус не обнаружен")
             timestamp = response.get('current_date', timestamp)
             logger.debug("Сон")
-        except TelegramError as error:
+        except HomeworkError as error:
             message = f"Ошибка в программы: {error}"
             logger.error(message, exc_info=True)
             send_message(bot, message)

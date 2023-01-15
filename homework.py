@@ -51,20 +51,31 @@ def send_message(bot: Bot, message):
 
 def get_api_answer(timestamp):
     """Запрос к единственному эндпоинту API Yandex.Practicum."""
+    params = {"from_date": timestamp}
     try:
         api_answer = requests.get(
-            ENDPOINT, headers=HEADERS, params={"from_date": timestamp}
+            ENDPOINT,
+            headers=HEADERS,
+            params=params
         )
-    except requests.RequestException:
-        raise ApiResponseException('Эндпоинт не доступен')
+    except requests.RequestException as error:
+        raise ApiResponseException('Эндпоинт не доступен! {error}')from error
     if api_answer.status_code != requests.codes.ok:
         raise ApiResponseException(
-            'Ошибка при запросе к API.',
-            api_answer.status_code,
-            api_answer.headers,
-            api_answer.url
+            f'Ошибка при запросе к API.- {api_answer.status_code}'
+            f'{HEADERS}'
+            f'{ENDPOINT}'
+            f'{params}'
         )
-    return api_answer.json()
+    try:
+        return api_answer.json()
+    except ValueError:
+        raise ValueError(
+            f'Не удалось получить данные -  {api_answer.status_code}'
+            f'{HEADERS}'
+            f'{ENDPOINT}'
+            f'{params}'
+        )
 
 
 def check_response(response):
@@ -75,7 +86,7 @@ def check_response(response):
     logger.info("Получаем homeworks")
     homeworks = response.get("homeworks")
     if 'homeworks' not in response or 'current_date' not in response:
-        raise KeyError(response)
+        raise KeyError(f'Ответ API: {response}')
     if not isinstance(homeworks, list):
         raise TypeError(f'Переменная  не является списком'
                         f'ТИп значения ключа {type(homeworks)}')
@@ -116,10 +127,11 @@ def main():
             logger.debug("New статус не обнаружен")
             timestamp = response.get('current_date', timestamp)
             logger.debug("Сон")
-        except HomeworkError as error:
+        except Exception as error:
             message = f"Ошибка в программы: {error}"
             logger.error(message, exc_info=True)
-            send_message(bot, message)
+            if message != status:
+                send_message(bot, message)
         finally:
             time.sleep(RETRY_PERIOD)
 
